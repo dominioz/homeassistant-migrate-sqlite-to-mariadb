@@ -24,7 +24,7 @@ FORCE_MODE=false
 if [[ -z "$SQLITE_DB" || -z "$MYSQL_HOST" || -z "$MYSQL_USER" || -z "$MYSQL_DB" ]]; then
   echo "Usage: $0 <sqlite_db> <mysql_host> <mysql_user> <mysql_password|env> <mysql_db>"
   echo "Example:"
-  echo "  MYSQL_PWD=secret ./sqlite_to_mariadb.sh home-assistant_v2.db 192.168.77.134 homeassistant secret homeassistant"
+  echo "  MYSQL_PWD=secret ./sqlite_to_mariadb.sh home-assistant_v2.db 192.168.1.2 homeassistant secret homeassistant"
   exit 1
 fi
 
