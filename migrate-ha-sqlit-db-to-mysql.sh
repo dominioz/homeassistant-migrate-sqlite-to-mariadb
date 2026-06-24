@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# SQLite → MariaDB table-by-table migration
+# SQLite → MySQL table-by-table migration
 # Author: Slawek 
-# Code writing: ChatGPT (GPT-5)
+# Code writing: ChatGPT (GPT-5) / Adapted for MySQL
 # --------------------------------------------------------------
 
 set -euo pipefail
@@ -16,7 +16,7 @@ MYSQL_PWD="${4:-${MYSQL_PWD:-}}"
 MYSQL_DB="${5:-}"
 CHARSET="utf8mb4"
 CSV_DIR="./sqlite_csv"
-PARALLEL_JOBS=2
+PARALLEL_JOBS=5
 FORCE_MODE=false
 # ===============================================================
 
@@ -24,7 +24,7 @@ FORCE_MODE=false
 if [[ -z "$SQLITE_DB" || -z "$MYSQL_HOST" || -z "$MYSQL_USER" || -z "$MYSQL_DB" ]]; then
   echo "Usage: $0 <sqlite_db> <mysql_host> <mysql_user> <mysql_password|env> <mysql_db>"
   echo "Example:"
-  echo "  MYSQL_PWD=secret ./sqlite_to_mariadb.sh home-assistant_v2.db 192.168.1.2 homeassistant secret homeassistant"
+  echo "  MYSQL_PWD=secret ./sqlite_to_mysql.sh home-assistant_v2.db 192.168.1.2 homeassistant secret homeassistant"
   exit 1
 fi
 
@@ -37,7 +37,7 @@ mkdir -p "$CSV_DIR"
 start_time=$(date +%s)
 
 echo "====================================================="
-echo " SQLite → MariaDB Migration Tool"
+echo " SQLite → MySQL Migration Tool"
 echo "-----------------------------------------------------"
 echo " Source DB: $SQLITE_DB"
 echo " Target DB: $MYSQL_DB on $MYSQL_HOST (user: $MYSQL_USER)"
@@ -111,7 +111,7 @@ migrate_table() {
   ')
 
 
-  # --- normalize schema for MariaDB ----------------------------
+  # --- normalize schema for MySQL ------------------------------
   CREATE_SQL=$(echo "$CREATE_SQL" | \
     sed -E 's/IF NOT EXISTS//Ig' | \
     sed -E 's/REAL/DOUBLE PRECISION/Ig' | \
@@ -131,8 +131,8 @@ migrate_table() {
   CREATE_SQL=$(echo "$CREATE_SQL" | sed -E 's/"([^"]+)"/`\1`/g')
 
   # Drop and recreate
-  echo "[*] Recreating table in MariaDB..."
-  mariadb --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" \
+  echo "[*] Recreating table in MySQL..."
+  mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" \
     "$MYSQL_DB" --default-character-set="$CHARSET" -e "
       SET FOREIGN_KEY_CHECKS=0; SET UNIQUE_CHECKS=0;
       DROP TABLE IF EXISTS \`$TABLE\`;
@@ -141,7 +141,7 @@ migrate_table() {
     "
 
   # Fix auto-increment on primary key integer fields
-  ALTER_SQL=$(mariadb --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" \
+  ALTER_SQL=$(mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" \
       --batch --skip-column-names "$MYSQL_DB" -e "
       SELECT CONCAT(
         'ALTER TABLE \`', table_name, '\` MODIFY COLUMN \`', column_name, '\` ',
@@ -157,20 +157,20 @@ migrate_table() {
 
   if [[ -n "$ALTER_SQL" ]]; then
     echo "[*] Adding AUTO_INCREMENT to primary key(s)..."
-    echo "$ALTER_SQL" | mariadb --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" "$MYSQL_DB"
+    echo "$ALTER_SQL" | mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" "$MYSQL_DB"
   fi
 
   # Specific fix for Home Assistant statistics_meta.shared_attrs
   if [[ "$TABLE" == "statistics_meta" ]]; then
     echo "[*] Ensuring shared_attrs is LONGTEXT..."
-    mariadb --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" "$MYSQL_DB" \
+    mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" "$MYSQL_DB" \
       -e "ALTER TABLE statistics_meta MODIFY COLUMN shared_attrs LONGTEXT;"
   fi
 
   # Import data
   echo "[*] Importing $(wc -l < "$csv") rows via LOAD DATA LOCAL INFILE..."
   t0=$(date +%s)
-  mariadb --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" \
+  mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" \
     --local-infile=1 --default-character-set="$CHARSET" "$MYSQL_DB" -e "
       SET FOREIGN_KEY_CHECKS=0; SET UNIQUE_CHECKS=0;
       LOAD DATA LOCAL INFILE '$(realpath "$csv")'
