@@ -1,4 +1,4 @@
-SQLite → MariaDB Migration Tool for Home Assistant
+SQLite → Mysql Migration Tool for Home Assistant
 ===================================================
 
 A Bash script to migrate Home Assistant's SQLite database to MariaDB, table by table, 
