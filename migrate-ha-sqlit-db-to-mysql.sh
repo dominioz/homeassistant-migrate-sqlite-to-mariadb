@@ -160,12 +160,20 @@ migrate_table() {
     echo "$ALTER_SQL" | mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" "$MYSQL_DB"
   fi
 
-  # Specific fix for Home Assistant statistics_meta.shared_attrs
+  # Specific fix for Home Assistant statistics_meta.shared_attrs (MySQL Safe Check)
   if [[ "$TABLE" == "statistics_meta" ]]; then
-    echo "[*] Ensuring shared_attrs is LONGTEXT..."
-    mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" "$MYSQL_DB" \
-      -e "ALTER TABLE statistics_meta MODIFY COLUMN shared_attrs LONGTEXT;"
+    # Verifica se a coluna realmente existe antes de tentar alterá-la
+    COL_EXISTS=$(mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" \
+      --batch --skip-column-names "$MYSQL_DB" \
+      -e "SHOW COLUMNS FROM statistics_meta LIKE 'shared_attrs';")
+    
+    if [[ -n "$COL_EXISTS" ]]; then
+      echo "[*] Ensuring shared_attrs is LONGTEXT..."
+      mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PWD" "$MYSQL_DB" \
+        -e "ALTER TABLE statistics_meta MODIFY COLUMN shared_attrs LONGTEXT;"
+    fi
   fi
+
 
   # Import data
   echo "[*] Importing $(wc -l < "$csv") rows via LOAD DATA LOCAL INFILE..."
